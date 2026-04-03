@@ -53,7 +53,7 @@ python review_csv_to_xlsx.py <input.csv> [output.xlsx]
 
 ## 阶段二：二级分类（Claude 填写）
 
-脚本执行完毕后，Claude 读取输出的 xlsx 文件，对每条评论的 A 列填写二级分类。
+脚本执行完毕后，Claude 读取输出的 xlsx 文件中的 C 列（原文列），对每条评论的 A 列填写二级分类。
 
 ### 分类规则
 
