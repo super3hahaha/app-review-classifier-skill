@@ -11,70 +11,49 @@ description: 处理 Google Play 用户评论 CSV 文件，完成清洗、格式�
 
 ---
 
-## Step 1：读取 CSV
+## 执行流程
 
-Google Play 导出的 CSV 通常为 **UTF-16 编码**，必须用以下方式读取：
-
-```python
-import pandas as pd
-df = pd.read_csv('file.csv', encoding='utf-16')
-```
-
-**目标列**（固定提取这5列）：
-
-| 原始列名 | 输出列名 |
-|---|---|
-| Review Text | 原文 (Review Text) |
-| Star Rating | 评分 (Star Rating) |
-| Reviewer Language | 语言代码 (Language) |
-| Review Submit Date and Time | 发布时间 (Submit Date) |
-| Review Link | Review Link |
-
-**日期格式**：统一转为 `YYYY-MM-DD`：
-```python
-df['Review Submit Date and Time'] = pd.to_datetime(df['Review Submit Date and Time']).dt.strftime('%Y-%m-%d')
-```
+整个流程分两阶段：
+1. **数据处理（脚本自动完成）**：调用 `review_csv_to_xlsx.py` 完成 CSV 读取、清洗、拆分、机翻公式、xlsx 格式化
+2. **二级分类（Claude 完成）**：读取脚本输出的 xlsx，逐条填写 A 列的二级分类
 
 ---
 
-## Step 2：数据清洗
+## 阶段一：调用预处理脚本
 
-```python
-# 过滤原文为空的行
-df = df[df['Review Text'].notna() & (df['Review Text'].str.strip() != '')]
+本 skill 附带 `review_csv_to_xlsx.py` 脚本，**必须优先调用此脚本**处理数据，不要手写数据处理代码。
+
+### 调用方式
+
+```bash
+# 确保依赖已安装
+pip install pandas openpyxl
+
+# 运行脚本（脚本位于 skill 同目录下）
+python review_csv_to_xlsx.py <input.csv> [output.xlsx]
 ```
+
+- 输入：Google Play 导出的评论 CSV 文件路径
+- 输出：格式化好的 xlsx 文件（默认与输入同名，扩展名改为 .xlsx）
+- 输出路径建议：`/mnt/user-data/outputs/`
+
+### 脚本完成的工作
+
+脚本自动完成以下所有步骤，无需 Claude 手动处理：
+
+1. **读取 CSV**：自动检测 UTF-16/UTF-8 编码，提取 5 个关键列（Review Text, Star Rating, Reviewer Language, Review Submit Date and Time, Review Link）
+2. **数据清洗**：过滤原文为空的行，日期统一转为 `YYYY-MM-DD`
+3. **拆分 Sheet**：5星评论与 1-4星评论分为两个独立 Sheet
+4. **列排序与机翻公式**：按 `二级分类 | 机翻 | 原文 | 评分 | 语言代码 | 发布时间 | Review Link` 排列，B 列写入 `GOOGLETRANSLATE` 公式
+5. **xlsx 格式化**：标题行蓝底白字、列宽预设、冻结首行、自动筛选
+
+脚本输出的 xlsx 中，A 列（二级分类）为空，等待阶段二填充。
 
 ---
 
-## Step 3：拆分为两个 Sheet
+## 阶段二：二级分类（Claude 填写）
 
-- **5星评论** Sheet：`Star Rating == 5`
-- **1-4星评论** Sheet：`Star Rating < 5`
-
----
-
-## Step 4：列顺序与机翻公式
-
-最终列顺序（从左到右）：
-
-```
-A: 二级分类
-B: 机翻 (Translation)
-C: 原文 (Review Text)
-D: 评分 (Star Rating)
-E: 语言代码 (Language)
-F: 发布时间 (Submit Date)
-G: Review Link
-```
-
-**机翻公式**（B列，上传到 Google Sheets 后自动生效）：
-```
-=IF(C2="","",GOOGLETRANSLATE(C2,E2,"zh-CN"))
-```
-
----
-
-## Step 5：二级分类
+脚本执行完毕后，Claude 读取输出的 xlsx 文件，对每条评论的 A 列填写二级分类。
 
 ### 分类规则
 
@@ -173,27 +152,6 @@ G: Review Link
 数据量 ≤ 200 条时，由 Claude 直接逐条判断分类，无需 API 调用。
 
 数据量 > 200 条时，建议用户使用本地 Python 脚本 + Anthropic API key 批量处理（询问用户是否有 API key）。
-
----
-
-## Step 6：xlsx 格式要求
-
-```python
-from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment
-from openpyxl.utils import get_column_letter
-
-# 标题行样式
-header_fill = PatternFill('solid', start_color='4472C4')
-header_font = Font(bold=True, color='FFFFFF', name='Arial', size=11)
-
-# 列宽参考
-widths = [30, 45, 45, 12, 18, 18, 80]  # A到G
-
-# 冻结首行 + 自动筛选
-ws.freeze_panes = 'A2'
-ws.auto_filter.ref = 'A1:G1'
-```
 
 ---
 
