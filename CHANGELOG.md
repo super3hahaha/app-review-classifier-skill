@@ -1,8 +1,12 @@
-## What's New in v1.1.1
+## What's New in v1.2.0
 
-### Bug Fixes
+### New Features
 
-- **12-06 vs 2-03 vs 12-10 分类规则明确化**：
-  - 1-3星无意义评论（如 bakbas、apk silid）→ `12-06 无意义/不相关差评`
-  - 4星无意义评论 → `2-03 4星无意义评论`
-  - 有实际内容但无法匹配现有分类 → `12-10 表述不清暂无法归类`
+- **多 App 支持**：二级分类列表从 SKILL.md 中抽离，每个 App 独立存放在 `references/` 目录下
+- **App 确认阶段**：执行前先列出已支持的 App，询问用户是哪个 App 的评论
+- **新 App 动态扩展**：如果用户的 App 不在列表中，可提供二级分类列表，自动保存为新的 reference 文件
+
+### Changes
+
+- 流程从三阶段改为四阶段：确认 App → 脚本处理 → 询问意图 → 分类
+- 首个已支持 App：MP3 Cutter（`references/mp3-cutter.md`）
