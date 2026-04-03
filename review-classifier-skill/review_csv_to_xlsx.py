@@ -57,7 +57,6 @@ def read_csv(path: str) -> pd.DataFrame:
             df = pd.read_csv(path, encoding=enc)
             if all(col in df.columns for col in SOURCE_COLUMNS):
                 return df[SOURCE_COLUMNS]
-            # 列名匹配失败，可能编码对了但文件结构不同
             missing = [c for c in SOURCE_COLUMNS if c not in df.columns]
             raise ValueError(f"CSV 缺少必需列: {missing}\n现有列: {list(df.columns)}")
         except (UnicodeDecodeError, UnicodeError):
@@ -82,7 +81,10 @@ def clean(df: pd.DataFrame) -> pd.DataFrame:
 def split_by_rating(df: pd.DataFrame):
     five_star = df[df["Star Rating"] == 5].reset_index(drop=True)
     low_star = df[df["Star Rating"] < 5].reset_index(drop=True)
-    return five_star, low_star
+    five_star_long = five_star[
+        five_star["Review Text"].str.len() >= FIVE_STAR_SHORT_THRESHOLD
+    ].reset_index(drop=True)
+    return five_star, five_star_long, low_star
 
 
 # ── Step 4 + 6: 写入 xlsx ────────────────────────────
@@ -132,17 +134,21 @@ def write_sheet(ws, df: pd.DataFrame, is_five_star: bool = False):
         ws.auto_filter.ref = f"A1:G{ws.max_row}"
 
 
-def build_xlsx(five_star: pd.DataFrame, low_star: pd.DataFrame, output_path: str):
+def build_xlsx(five_star, five_star_long, low_star, output_path: str):
     wb = Workbook()
 
-    # Sheet 1: 1-4星评论（放前面，通常是重点关注对象）
+    # Sheet 1: 1-4星评论
     ws_low = wb.active
     ws_low.title = "1-4星评论"
     write_sheet(ws_low, low_star)
 
-    # Sheet 2: 5星评论
+    # Sheet 2: 5星评论（全部）
     ws_five = wb.create_sheet("5星评论")
     write_sheet(ws_five, five_star, is_five_star=True)
+
+    # Sheet 3: 5星长评（≥50字符，A列留空）
+    ws_five_long = wb.create_sheet("5星长评")
+    write_sheet(ws_five_long, five_star_long)
 
     wb.save(output_path)
 
@@ -167,16 +173,15 @@ def main():
     df = clean(df)
     print(f"  清洗后行数: {len(df)}")
 
-    five_star, low_star = split_by_rating(df)
-    print(f"  5星: {len(five_star)} 条, 1-4星: {len(low_star)} 条")
+    five_star, five_star_long, low_star = split_by_rating(df)
+    five_star_short = len(five_star) - len(five_star_long)
+    print(f"  5星: {len(five_star)} 条 (短评 {five_star_short}, 长评 {len(five_star_long)}), 1-4星: {len(low_star)} 条")
 
-    five_star_long = len(five_star[five_star["Review Text"].str.len() >= FIVE_STAR_SHORT_THRESHOLD])
-    five_star_short = len(five_star) - five_star_long
-
-    build_xlsx(five_star, low_star, output_path)
+    build_xlsx(five_star, five_star_long, low_star, output_path)
     print(f"输出: {output_path}")
-    print(f"  ✓ 5星短评(<{FIVE_STAR_SHORT_THRESHOLD}字符): {five_star_short} 条，已自动标为 2-01")
-    print(f"  ✓ 5星长评(≥{FIVE_STAR_SHORT_THRESHOLD}字符): {five_star_long} 条，等待 Claude 分类")
+    print(f"  ✓ Sheet 1: 1-4星评论 ({len(low_star)} 条)")
+    print(f"  ✓ Sheet 2: 5星评论 ({len(five_star)} 条，短评已标为 2-01)")
+    print(f"  ✓ Sheet 3: 5星长评 ({len(five_star_long)} 条，等待分类)")
     print("  ✓ 机翻公式已写入，上传 Google Sheets 后生效")
 
 

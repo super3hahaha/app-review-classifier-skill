@@ -68,12 +68,12 @@ python review_csv_to_xlsx.py <input.csv> [output.xlsx]
 
 1. **读取 CSV**：自动检测 UTF-16/UTF-8 编码，提取 5 个关键列（Review Text, Star Rating, Reviewer Language, Review Submit Date and Time, Review Link）
 2. **数据清洗**：过滤原文为空的行，日期统一转为 `YYYY-MM-DD`
-3. **拆分 Sheet**：5星评论与 1-4星评论分为两个独立 Sheet
+3. **拆分 Sheet**：拆分为 3 个 Sheet：1-4星评论、5星评论（全部）、5星长评（≥50字符）
 4. **列排序与机翻公式**：按 `二级分类 | 机翻 | 原文 | 评分 | 语言代码 | 发布时间 | Review Link` 排列，B 列写入 `GOOGLETRANSLATE` 公式
 5. **xlsx 格式化**：标题行蓝底白字、列宽预设、冻结首行、自动筛选
 6. **5星短评自动标注**：原文 < 50 字符的 5星评论，A 列自动填入 `2-01 5星纯好评`
 
-脚本输出的 xlsx 中，1-4星评论的 A 列留空，5星长评（≥50字符）的 A 列留空，等待阶段四填充。
+脚本输出的 xlsx 包含 3 个 Sheet：1-4星评论、5星评论（全部，短评已标为 2-01）、5星长评（≥50字符，A 列留空）。
 
 ---
 
@@ -83,10 +83,10 @@ python review_csv_to_xlsx.py <input.csv> [output.xlsx]
 
 提示示例：
 
-> xlsx 已生成，包含：
-> - 1-4星评论: XX 条（A 列留空）
-> - 5星长评(≥50字符): XX 条（A 列留空）
-> - 5星短评(<50字符): XX 条（已自动标为 2-01）
+> xlsx 已生成，包含 3 个 Sheet：
+> - Sheet 1「1-4星评论」: XX 条（A 列留空）
+> - Sheet 2「5星评论」: XX 条（短评已标为 2-01，长评 A 列留空）
+> - Sheet 3「5星长评」: XX 条（A 列留空，为 Sheet 2 中长评的副本）
 >
 > 请问接下来要处理哪部分？
 > 1. 只分类 1-4星评论
@@ -100,6 +100,8 @@ python review_csv_to_xlsx.py <input.csv> [output.xlsx]
 ## 阶段四：二级分类（Claude 填写）
 
 根据用户选择，Claude 读取对应 Sheet 中 C 列（原文列）的内容，参照阶段一加载的二级分类列表，对 A 列留空的评论填写二级分类。
+
+**重要**：分类 5星长评时，只需对「5星长评」Sheet 进行分类（避免重复工作），分类结果同时写入「5星评论」Sheet 中对应行的 A 列。
 
 ### 分类规则
 
