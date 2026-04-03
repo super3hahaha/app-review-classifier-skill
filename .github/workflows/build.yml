@@ -1,0 +1,26 @@
+name: Build and Release .skill
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build .skill file
+        run: |
+          zip -r app-review-classifier.skill review-classifier-skill/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: app-review-classifier.skill
+          generate_release_notes: false
+          body_path: CHANGELOG.md
