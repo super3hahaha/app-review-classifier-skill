@@ -153,6 +153,10 @@ python review_csv_to_xlsx.py <input.csv> [output.xlsx]
 
 数据量 > 200 条时，建议用户使用本地 Python 脚本 + Anthropic API key 批量处理（询问用户是否有 API key）。
 
+### 输出要求
+
+分类完成后，直接将结果写入 xlsx 文件的 A 列，**不要逐条打印分类结果**。只需输出简要统计（总条数、各大类数量）即可。
+
 ---
 
 ## 注意事项
