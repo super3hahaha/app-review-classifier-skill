@@ -84,7 +84,12 @@ python review_csv_to_xlsx.py <input.csv> [output.xlsx]
 - **5星评论分流处理**（由脚本自动完成）：
   - 原文 < 50 字符的 5星评论，脚本已自动在 A 列填入 `2-01 5星纯好评`
   - 原文 ≥ 50 字符的 5星评论，A 列留空，由 Claude 询问用户是否需要分类，确认后逐条判断
-- 1-4星表格的纯好评 → `2-02 4星及以下纯好评`（包括 good/nice/best 等简短好评，以及其他语言中意思明确的好评词）
+- **1-4星表格的纯好评 → `2-02 4星及以下纯好评`**：只要内容表达正面/肯定意思，就归此类。包括但不限于：
+  - 英文: good, nice, best, great, love, awesome, amazing, excellent, perfect, wonderful, cool, fantastic
+  - 中文: 好用、不错、很棒、喜欢、推荐
+  - 其他语言中意思明确的好评词（如西语 bueno、葡萄牙语 bom、日语 良い 等）
+  - 组合短语：good app、nice app、very good、so good 等
+  - **重要：这类评论绝对不能归为 12-06 无意义/不相关差评**
 - `2-03 4星无意义评论` 仅用于真正意思不明的词（如 "bakbas"、"apk silid"）
 
 ### 完整二级分类列表
