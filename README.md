@@ -30,11 +30,3 @@ python review-classifier-skill/review_csv_to_xlsx.py input.csv [output.xlsx]
 
 脚本完成 CSV → xlsx 的数据处理（清洗、拆分、公式、样式），二级分类列留空等待 Claude 填充。
 
-## 构建
-
-推送 `v*` tag 时自动通过 GitHub Actions 构建 `.skill` 文件并创建 Release。
-
-```bash
-git tag v1.0.0
-git push origin v1.0.0
-```
