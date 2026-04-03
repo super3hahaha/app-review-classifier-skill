@@ -16,11 +16,12 @@ jobs:
 
       - name: Build .skill file
         run: |
-          zip -r app-review-classifier.skill review-classifier-skill/
+          VERSION=${GITHUB_REF_NAME#v}
+          zip -r "app-review-classifier-${VERSION}.skill" review-classifier-skill/
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: app-review-classifier.skill
+          files: "*.skill"
           generate_release_notes: false
           body_path: CHANGELOG.md
