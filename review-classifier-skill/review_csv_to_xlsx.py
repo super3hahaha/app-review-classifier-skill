@@ -45,6 +45,8 @@ HEADER_FILL = PatternFill("solid", fgColor="4472C4")
 HEADER_FONT = Font(bold=True, color="FFFFFF", name="Arial", size=11)
 BODY_FONT = Font(name="Arial", size=11)
 
+FIVE_STAR_SHORT_THRESHOLD = 50  # 原文 < 此字符数的 5星评论自动标为纯好评
+
 
 # ── Step 1: 读取 CSV ─────────────────────────────────
 
@@ -85,7 +87,7 @@ def split_by_rating(df: pd.DataFrame):
 
 # ── Step 4 + 6: 写入 xlsx ────────────────────────────
 
-def write_sheet(ws, df: pd.DataFrame):
+def write_sheet(ws, df: pd.DataFrame, is_five_star: bool = False):
     """向 worksheet 写入表头 + 数据行 + 机翻公式 + 样式。"""
     # 表头
     for col_idx, header in enumerate(OUTPUT_HEADERS, 1):
@@ -96,8 +98,11 @@ def write_sheet(ws, df: pd.DataFrame):
 
     # 数据行
     for row_idx, (_, row) in enumerate(df.iterrows(), 2):
-        # A: 二级分类（留空）
-        ws.cell(row=row_idx, column=1, value="")
+        # A: 二级分类
+        if is_five_star and len(str(row["Review Text"]).strip()) < FIVE_STAR_SHORT_THRESHOLD:
+            ws.cell(row=row_idx, column=1, value="2-01 5星纯好评")
+        else:
+            ws.cell(row=row_idx, column=1, value="")
         # B: 机翻公式
         formula = f'=IF(C{row_idx}="","",GOOGLETRANSLATE(C{row_idx},E{row_idx},"zh-CN"))'
         ws.cell(row=row_idx, column=2, value=formula)
@@ -137,7 +142,7 @@ def build_xlsx(five_star: pd.DataFrame, low_star: pd.DataFrame, output_path: str
 
     # Sheet 2: 5星评论
     ws_five = wb.create_sheet("5星评论")
-    write_sheet(ws_five, five_star)
+    write_sheet(ws_five, five_star, is_five_star=True)
 
     wb.save(output_path)
 
@@ -165,9 +170,13 @@ def main():
     five_star, low_star = split_by_rating(df)
     print(f"  5星: {len(five_star)} 条, 1-4星: {len(low_star)} 条")
 
+    five_star_long = len(five_star[five_star["Review Text"].str.len() >= FIVE_STAR_SHORT_THRESHOLD])
+    five_star_short = len(five_star) - five_star_long
+
     build_xlsx(five_star, low_star, output_path)
     print(f"输出: {output_path}")
-    print("  ✓ 二级分类列已留空，等待 Claude 填充")
+    print(f"  ✓ 5星短评(<{FIVE_STAR_SHORT_THRESHOLD}字符): {five_star_short} 条，已自动标为 2-01")
+    print(f"  ✓ 5星长评(≥{FIVE_STAR_SHORT_THRESHOLD}字符): {five_star_long} 条，等待 Claude 分类")
     print("  ✓ 机翻公式已写入，上传 Google Sheets 后生效")
 
 
