@@ -125,9 +125,9 @@ python review_csv_to_xlsx.py file1.csv file2.csv file3.csv -o output.xlsx
 
 ### 分类操作方式
 
-数据量 ≤ 200 条时，由 Claude 直接逐条判断分类，无需 API 调用。
+数据量 ≤ 200 条时，由 Claude 直接一次性逐条判断分类。
 
-数据量 > 200 条时，建议用户使用本地 Python 脚本 + Anthropic API key 批量处理（询问用户是否有 API key）。
+数据量 > 200 条时，由 Claude 分批处理，每批 50 条，读取 → 分类 → 写入，然后继续下一批，直到全部完成。无需 API。
 
 ### 输出要求
 
