@@ -122,7 +122,7 @@ python review_csv_to_xlsx.py file1.csv file2.csv file3.csv -o output.xlsx
 - **4星无意义评论** → `2-03 4星无意义评论`
 - **有实际内容但无法匹配现有分类**（评论有明确意思，但找不到合适的分类）→ `12-10 表述不清暂无法归类`
 - **1-4星表格的纯好评 → `2-02 4星及以下纯好评`**：只要内容表达正面/肯定意思，就归此类。包括但不限于：
-  - 英文: good, nice, best, great, love, awesome, amazing, excellent, perfect, wonderful, cool, fantastic
+  - 英文: good, nice, best, great, love, awesome, amazing, excellent, perfect, wonderful, cool, fantastic, thank
   - 中文: 好用、不错、很棒、喜欢、推荐
   - 其他语言中意思明确的好评词（如西语 bueno、葡萄牙语 bom、日语 良い 等）
   - 组合短语：good app、nice app、very good、so good 等
