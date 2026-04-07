@@ -1,11 +1,11 @@
 """
 Google Play 评论 CSV → xlsx 预处理脚本
 
-功能：读取 Google Play 导出的评论 CSV，完成清洗、格式转换、拆分，
+功能：读取一个或多个 Google Play 导出的评论 CSV，完成清洗、格式转换、拆分，
 输出带机翻公式的 xlsx 文件（二级分类列留空，由 Claude 或 API 填充）。
 
 用法：
-    python review_csv_to_xlsx.py <input.csv> [output.xlsx]
+    python review_csv_to_xlsx.py <input1.csv> [input2.csv ...] [-o output.xlsx]
 
 依赖：
     pip install pandas openpyxl
@@ -84,12 +84,12 @@ def split_by_rating(df: pd.DataFrame):
     five_star_long = five_star[
         five_star["Review Text"].str.len() >= FIVE_STAR_SHORT_THRESHOLD
     ].reset_index(drop=True)
-    return five_star, five_star_long, low_star
+    return five_star_long, low_star
 
 
 # ── Step 4 + 6: 写入 xlsx ────────────────────────────
 
-def write_sheet(ws, df: pd.DataFrame, is_five_star: bool = False):
+def write_sheet(ws, df: pd.DataFrame):
     """向 worksheet 写入表头 + 数据行 + 机翻公式 + 样式。"""
     # 表头
     for col_idx, header in enumerate(OUTPUT_HEADERS, 1):
@@ -100,11 +100,8 @@ def write_sheet(ws, df: pd.DataFrame, is_five_star: bool = False):
 
     # 数据行
     for row_idx, (_, row) in enumerate(df.iterrows(), 2):
-        # A: 二级分类
-        if is_five_star and len(str(row["Review Text"]).strip()) < FIVE_STAR_SHORT_THRESHOLD:
-            ws.cell(row=row_idx, column=1, value="2-01 5星纯好评")
-        else:
-            ws.cell(row=row_idx, column=1, value="")
+        # A: 二级分类（留空）
+        ws.cell(row=row_idx, column=1, value="")
         # B: 机翻公式
         formula = f'=IF(C{row_idx}="","",GOOGLETRANSLATE(C{row_idx},E{row_idx},"zh-CN"))'
         ws.cell(row=row_idx, column=2, value=formula)
@@ -134,21 +131,17 @@ def write_sheet(ws, df: pd.DataFrame, is_five_star: bool = False):
         ws.auto_filter.ref = f"A1:G{ws.max_row}"
 
 
-def build_xlsx(five_star, five_star_long, low_star, output_path: str):
+def build_xlsx(all_low_star: pd.DataFrame, all_five_long: pd.DataFrame, output_path: str):
     wb = Workbook()
 
     # Sheet 1: 1-4星评论
     ws_low = wb.active
     ws_low.title = "1-4星评论"
-    write_sheet(ws_low, low_star)
+    write_sheet(ws_low, all_low_star)
 
-    # Sheet 2: 5星评论（全部）
-    ws_five = wb.create_sheet("5星评论")
-    write_sheet(ws_five, five_star, is_five_star=True)
-
-    # Sheet 3: 5星长评（≥50字符，A列留空）
+    # Sheet 2: 5星长评（≥50字符）
     ws_five_long = wb.create_sheet("5星长评")
-    write_sheet(ws_five_long, five_star_long)
+    write_sheet(ws_five_long, all_five_long)
 
     wb.save(output_path)
 
@@ -156,32 +149,64 @@ def build_xlsx(five_star, five_star_long, low_star, output_path: str):
 # ── 主流程 ────────────────────────────────────────────
 
 def main():
-    if len(sys.argv) < 2:
-        print("用法: python review_csv_to_xlsx.py <input.csv> [output.xlsx]")
+    # 解析参数
+    args = sys.argv[1:]
+    if not args:
+        print("用法: python review_csv_to_xlsx.py <input1.csv> [input2.csv ...] [-o output.xlsx]")
         sys.exit(1)
 
-    input_path = sys.argv[1]
-    if len(sys.argv) >= 3:
-        output_path = sys.argv[2]
-    else:
-        output_path = str(Path(input_path).with_suffix(".xlsx"))
+    output_path = None
+    input_paths = []
+    i = 0
+    while i < len(args):
+        if args[i] == "-o" and i + 1 < len(args):
+            output_path = args[i + 1]
+            i += 2
+        else:
+            input_paths.append(args[i])
+            i += 1
 
-    print(f"读取: {input_path}")
-    df = read_csv(input_path)
-    print(f"  原始行数: {len(df)}")
+    if not input_paths:
+        print("错误: 未指定输入 CSV 文件")
+        sys.exit(1)
 
-    df = clean(df)
-    print(f"  清洗后行数: {len(df)}")
+    if output_path is None:
+        output_path = str(Path(input_paths[0]).with_suffix(".xlsx"))
 
-    five_star, five_star_long, low_star = split_by_rating(df)
-    five_star_short = len(five_star) - len(five_star_long)
-    print(f"  5星: {len(five_star)} 条 (短评 {five_star_short}, 长评 {len(five_star_long)}), 1-4星: {len(low_star)} 条")
+    # 处理每个 CSV，合并结果
+    all_low_star = []
+    all_five_long = []
+    total_raw = 0
+    total_clean = 0
 
-    build_xlsx(five_star, five_star_long, low_star, output_path)
+    for csv_path in input_paths:
+        print(f"读取: {csv_path}")
+        df = read_csv(csv_path)
+        print(f"  原始行数: {len(df)}")
+        total_raw += len(df)
+
+        df = clean(df)
+        print(f"  清洗后行数: {len(df)}")
+        total_clean += len(df)
+
+        five_star_long, low_star = split_by_rating(df)
+        five_star_count = len(df[df["Star Rating"] == 5])
+        five_star_short = five_star_count - len(five_star_long)
+        print(f"  1-4星: {len(low_star)} 条, 5星长评: {len(five_star_long)} 条, 5星短评(跳过): {five_star_short} 条")
+
+        all_low_star.append(low_star)
+        all_five_long.append(five_star_long)
+
+    # 合并
+    all_low_star = pd.concat(all_low_star, ignore_index=True) if all_low_star else pd.DataFrame()
+    all_five_long = pd.concat(all_five_long, ignore_index=True) if all_five_long else pd.DataFrame()
+
+    build_xlsx(all_low_star, all_five_long, output_path)
+
+    print(f"\n汇总: {len(input_paths)} 个 CSV, 原始 {total_raw} 条, 清洗后 {total_clean} 条")
     print(f"输出: {output_path}")
-    print(f"  ✓ Sheet 1: 1-4星评论 ({len(low_star)} 条)")
-    print(f"  ✓ Sheet 2: 5星评论 ({len(five_star)} 条，短评已标为 2-01)")
-    print(f"  ✓ Sheet 3: 5星长评 ({len(five_star_long)} 条，等待分类)")
+    print(f"  ✓ Sheet 1: 1-4星评论 ({len(all_low_star)} 条)")
+    print(f"  ✓ Sheet 2: 5星长评 ({len(all_five_long)} 条)")
     print("  ✓ 机翻公式已写入，上传 Google Sheets 后生效")
 
 

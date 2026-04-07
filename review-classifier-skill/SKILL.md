@@ -7,7 +7,7 @@ description: 处理 Google Play 用户评论 CSV 文件，完成清洗、格式�
 
 ## 概述
 
-将 Google Play 导出的评论 CSV 转换为结构化、带分类的 xlsx 文件，支持5星与1-4星分表、二级分类标注、机翻公式。支持多个 App，每个 App 有独立的二级分类列表（存放在 `references/` 目录）。
+将 Google Play 导出的评论 CSV 转换为结构化、带分类的 xlsx 文件，支持多个 CSV 合并处理、1-4星与5星长评分表、二级分类标注、机翻公式。支持多个 App，每个 App 有独立的二级分类列表（存放在 `references/` 目录）。
 
 ---
 
@@ -15,9 +15,9 @@ description: 处理 Google Play 用户评论 CSV 文件，完成清洗、格式�
 
 整个流程分四个阶段：
 1. **确认 App**：列出已支持的 App，询问用户是哪个 App 的评论
-2. **数据处理（脚本自动完成）**：调用 `review_csv_to_xlsx.py` 完成 CSV 读取、清洗、拆分、机翻公式、xlsx 格式化
+2. **数据处理（脚本自动完成）**：调用 `review_csv_to_xlsx.py` 处理所有 CSV，合并输出一个 xlsx
 3. **询问用户操作意图**：告知用户各部分数据量，让用户选择要分类哪部分
-4. **二级分类（Claude 完成）**：根据用户选择和对应 App 的分类列表，逐条填写 A 列的二级分类
+4. **二级分类（Claude 完成）**：根据用户选择，逐条填写 A 列的二级分类
 
 ---
 
@@ -54,13 +54,17 @@ description: 处理 Google Play 用户评论 CSV 文件，完成清洗、格式�
 # 确保依赖已安装
 pip install pandas openpyxl
 
-# 运行脚本（脚本位于 skill 同目录下）
-python review_csv_to_xlsx.py <input.csv> [output.xlsx]
+# 单个 CSV
+python review_csv_to_xlsx.py input.csv -o output.xlsx
+
+# 多个 CSV（同一个 App，合并到一个 xlsx）
+python review_csv_to_xlsx.py file1.csv file2.csv file3.csv -o output.xlsx
 ```
 
-- 输入：Google Play 导出的评论 CSV 文件路径
-- 输出：格式化好的 xlsx 文件（默认与输入同名，扩展名改为 .xlsx）
+- 输入：一个或多个 Google Play 导出的评论 CSV 文件路径
+- 输出：格式化好的 xlsx 文件（多个 CSV 的数据按顺序合并）
 - 输出路径建议：`/mnt/user-data/outputs/`
+- 多个 CSV 默认属于同一个 App，只需确认一次
 
 ### 脚本完成的工作
 
@@ -68,25 +72,27 @@ python review_csv_to_xlsx.py <input.csv> [output.xlsx]
 
 1. **读取 CSV**：自动检测 UTF-16/UTF-8 编码，提取 5 个关键列（Review Text, Star Rating, Reviewer Language, Review Submit Date and Time, Review Link）
 2. **数据清洗**：过滤原文为空的行，日期统一转为 `YYYY-MM-DD`
-3. **拆分 Sheet**：拆分为 3 个 Sheet：1-4星评论、5星评论（全部）、5星长评（≥50字符）
+3. **拆分并合并**：所有 CSV 的数据按顺序合并，拆分为 2 个 Sheet
 4. **列排序与机翻公式**：按 `二级分类 | 机翻 | 原文 | 评分 | 语言代码 | 发布时间 | Review Link` 排列，B 列写入 `GOOGLETRANSLATE` 公式
 5. **xlsx 格式化**：标题行蓝底白字、列宽预设、冻结首行、自动筛选
-6. **5星短评自动标注**：原文 < 50 字符的 5星评论，A 列自动填入 `2-01 5星纯好评`
 
-脚本输出的 xlsx 包含 3 个 Sheet：1-4星评论、5星评论（全部，短评已标为 2-01）、5星长评（≥50字符，A 列留空）。
+脚本输出的 xlsx 包含 2 个 Sheet：
+- **Sheet 1「1-4星评论」**：所有 1-4 星评论，A 列留空
+- **Sheet 2「5星长评」**：原文 ≥ 50 字符的 5 星评论，A 列留空
+- 原文 < 50 字符的 5 星短评不输出（均为纯好评，无需分类）
 
 ---
 
 ## 阶段三：询问用户操作意图
 
-脚本执行完毕后，**必须先询问用户下一步要做什么**，不要直接开始分类。用户可能对同一个 CSV 多次处理，每次只处理一部分。
+脚本执行完毕后，**必须先询问用户下一步要做什么**，不要直接开始分类。用户可能对同一批 CSV 多次处理，每次只处理一部分。
 
 提示示例：
 
-> xlsx 已生成，包含 3 个 Sheet：
+> xlsx 已生成（共处理 X 个 CSV），包含 2 个 Sheet：
 > - Sheet 1「1-4星评论」: XX 条（A 列留空）
-> - Sheet 2「5星评论」: XX 条（短评已标为 2-01，长评 A 列留空）
-> - Sheet 3「5星长评」: XX 条（A 列留空，为 Sheet 2 中长评的副本）
+> - Sheet 2「5星长评」: XX 条（A 列留空）
+> - 5星短评(<50字符): XX 条（已跳过，均为纯好评）
 >
 > 请问接下来要处理哪部分？
 > 1. 只分类 1-4星评论
@@ -101,8 +107,6 @@ python review_csv_to_xlsx.py <input.csv> [output.xlsx]
 
 根据用户选择，Claude 读取对应 Sheet 中 C 列（原文列）的内容，参照阶段一加载的二级分类列表，对 A 列留空的评论填写二级分类。
 
-**重要**：分类 5星长评时，只需对「5星长评」Sheet 进行分类（避免重复工作），分类结果同时写入「5星评论」Sheet 中对应行的 A 列。
-
 ### 分类规则
 
 - **看内容，不看星级**：内容表达正面意思就归好评类，不管星级是几星
@@ -111,9 +115,6 @@ python review_csv_to_xlsx.py <input.csv> [output.xlsx]
 - **1-3星无意义评论**（如 "bakbas"、"apk silid"、乱码、无意义字符串）→ `12-06 无意义/不相关差评`
 - **4星无意义评论** → `2-03 4星无意义评论`
 - **有实际内容但无法匹配现有分类**（评论有明确意思，但找不到合适的分类）→ `12-10 表述不清暂无法归类`
-- **5星评论分流处理**（由脚本自动完成）：
-  - 原文 < 50 字符的 5星评论，脚本已自动在 A 列填入 `2-01 5星纯好评`
-  - 原文 ≥ 50 字符的 5星评论，A 列留空，由 Claude 询问用户是否需要分类，确认后逐条判断
 - **1-4星表格的纯好评 → `2-02 4星及以下纯好评`**：只要内容表达正面/肯定意思，就归此类。包括但不限于：
   - 英文: good, nice, best, great, love, awesome, amazing, excellent, perfect, wonderful, cool, fantastic
   - 中文: 好用、不错、很棒、喜欢、推荐
@@ -132,7 +133,7 @@ python review_csv_to_xlsx.py <input.csv> [output.xlsx]
 
 - 每个步骤执行时，打印一行简要状态（如"正在读取 CSV…""清洗完成，剩余 122 条"），**不要打印细节数据**
 - 分类完成后，直接将结果写入 xlsx 文件的 A 列，**不要逐条打印分类结果**，只需输出简要统计（总条数、各大类数量）即可
-- 统计中需说明多分类拆行情况（如“XX 条评论涉及多个分类，已拆分为 XX 行”）
+- 统计中需说明多分类拆行情况（如"XX 条评论涉及多个分类，已拆分为 XX 行"）
 
 ---
 
